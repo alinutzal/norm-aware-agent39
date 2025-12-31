@@ -1,0 +1,20 @@
+# Exploratory regime: light norm enforcement, permissive
+norms:
+  enabled: true
+  enforce_all: false
+  
+  reproducibility:
+    enabled: true
+    severity: low
+
+  validity:
+    enabled: true
+    severity: low
+
+  stability:
+    enabled: true
+    severity: medium
+
+  reporting:
+    enabled: false
+    severity: low

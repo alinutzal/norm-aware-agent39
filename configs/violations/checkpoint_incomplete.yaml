@@ -1,0 +1,10 @@
+# Violation: incomplete checkpointing (missing optimizer state)
+violations:
+  enabled: true
+  active:
+    - checkpoint_incomplete
+  
+  checkpoint_incomplete:
+    skip_optimizer_state: true
+    skip_scheduler_state: true
+    skip_epoch_count: true

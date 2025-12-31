@@ -1,0 +1,14 @@
+# Agentic mode: reactive agent without norm awareness
+agent:
+  enabled: true
+  norm_aware: false
+  reactive: true
+  
+  # Agent behavior
+  observe_frequency: every_batch
+  decide_frequency: every_epoch
+  action_threshold: 0.5
+
+logging:
+  agent_logs: true
+  decision_logs: true

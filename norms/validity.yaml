@@ -1,0 +1,21 @@
+# Validity norms
+eval_mode_enforced:
+  description: "Model must be in eval mode during evaluation"
+  check: "model.training == False during eval loop"
+  severity: critical
+  auto_fix: true
+  suggested_fix: "Call model.eval() before evaluation loop"
+
+no_augmentation_on_eval:
+  description: "Augmentation must not be applied to eval set"
+  check: "eval_transforms should not include augmentation"
+  severity: critical
+  auto_fix: false
+  suggested_fix: "Create separate transforms for train/eval (no aug on eval)"
+
+train_mode_enforced:
+  description: "Model must be in train mode during training"
+  check: "model.training == True during train loop"
+  severity: high
+  auto_fix: true
+  suggested_fix: "Call model.train() before training loop"

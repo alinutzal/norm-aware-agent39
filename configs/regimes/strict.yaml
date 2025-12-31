@@ -1,0 +1,20 @@
+# Strict regime: enforce all norms with zero tolerance
+norms:
+  enabled: true
+  enforce_all: true
+  
+  reproducibility:
+    enabled: true
+    severity: critical
+
+  validity:
+    enabled: true
+    severity: critical
+
+  stability:
+    enabled: true
+    severity: critical
+
+  reporting:
+    enabled: true
+    severity: high

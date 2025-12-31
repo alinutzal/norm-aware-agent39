@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: 'NORA: Norm-Aware Agent for Reliable ML Training'
+authors:
+  - family-names: Author
+    given-names: First
+    affiliation: Institution
+message: 'If you use this software, please cite it as below.'
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Author
+      given-names: First
+  title: 'NORA: Norm-Aware Agents for Robust ML Training'
+  year: 2025
+  journal: TBD
+  volume: TBD
+  issue: TBD
+  pages: TBD

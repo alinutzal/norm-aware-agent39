@@ -1,0 +1,11 @@
+# Violation: introduce AMP NaN/Inf issues
+violations:
+  enabled: true
+  active:
+    - amp_nan
+  
+  amp_nan:
+    inject_nans: true
+    inject_infs: true
+    skip_nan_checks: true
+    large_loss_scaling: true

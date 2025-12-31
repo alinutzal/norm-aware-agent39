@@ -1,0 +1,8 @@
+# Pipeline mode: standard training without agent
+agent:
+  enabled: false
+  norm_aware: false
+  reactive: false
+
+logging:
+  agent_logs: false

@@ -1,0 +1,34 @@
+# ML Pipeline specific configuration
+ml:
+  enabled: true
+  pipeline_type: "bank_marketing"
+  
+  # Data validation
+  validation:
+    enabled: true
+    schema_path: "configs/ml/schema.yaml"
+  
+  # Feature engineering
+  feature_engineering:
+    enabled: true
+    seed: 42
+    train_test_split: 0.2
+    encoding:
+      binary_cols: ["default", "housing", "loan", "y"]
+      categorical_cols: ["job", "marital", "education", "contact", "poutcome"]
+  
+  # Model training
+  training:
+    enabled: true
+    model_type: "catboost"
+    seed: 42
+    
+  # Evaluation
+  evaluation:
+    enabled: true
+    metrics:
+      - auc
+      - accuracy
+      - precision
+      - recall
+      - f1

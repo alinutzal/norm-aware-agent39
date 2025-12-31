@@ -1,0 +1,9 @@
+# Violation: model eval mode not enforced
+violations:
+  enabled: true
+  active:
+    - eval_mode_bug
+  
+  eval_mode_bug:
+    skip_eval_mode_set: true
+    use_train_mode_on_eval: true

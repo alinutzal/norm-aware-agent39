@@ -1,0 +1,14 @@
+# Reporting norms
+metric_consistency:
+  description: "All reported metrics must have same frequency and coverage"
+  check: "Metrics logged every epoch with no gaps"
+  severity: high
+  auto_fix: false
+  suggested_fix: "Ensure all metrics computed in every epoch"
+
+log_format:
+  description: "Logs must follow JSONL format with proper schema"
+  check: "Each log line is valid JSON with required fields"
+  severity: medium
+  auto_fix: true
+  suggested_fix: "Use structured logging with schema validation"

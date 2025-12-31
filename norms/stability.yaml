@@ -1,0 +1,14 @@
+# Stability norms
+amp_nan_guard:
+  description: "GradScaler must check for NaN/Inf in gradients and loss"
+  check: "Gradients and loss must be finite before optimizer step"
+  severity: critical
+  auto_fix: true
+  suggested_fix: "Use GradScaler.scale() and guard against NaNs"
+
+checkpoint_completeness:
+  description: "Checkpoints must include model, optimizer, scheduler, epoch"
+  check: "Saved checkpoint must contain all required state"
+  severity: critical
+  auto_fix: true
+  suggested_fix: "Save full state dict including optimizer and scheduler"

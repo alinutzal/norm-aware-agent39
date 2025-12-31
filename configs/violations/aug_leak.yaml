@@ -1,0 +1,9 @@
+# Violation: augmentation applied to eval set
+violations:
+  enabled: true
+  active:
+    - aug_leak
+  
+  aug_leak:
+    augment_eval_data: true
+    skip_aug_guard: true

@@ -1,0 +1,73 @@
+# Norm registry: catalog of all norms and their configuration
+norms:
+  - name: deterministic_seed
+    file: reproducibility.yaml
+    severity: critical
+    hooks:
+      - on_start
+      - on_epoch_start
+    enabled: true
+
+  - name: deterministic_algorithms
+    file: reproducibility.yaml
+    severity: critical
+    hooks:
+      - on_start
+    enabled: true
+
+  - name: no_dataloader_workers
+    file: reproducibility.yaml
+    severity: high
+    hooks:
+      - on_start
+    enabled: true
+
+  - name: eval_mode_enforced
+    file: validity.yaml
+    severity: critical
+    hooks:
+      - on_eval_start
+    enabled: true
+
+  - name: no_augmentation_on_eval
+    file: validity.yaml
+    severity: critical
+    hooks:
+      - on_eval_start
+    enabled: true
+
+  - name: train_mode_enforced
+    file: validity.yaml
+    severity: high
+    hooks:
+      - on_train_start
+    enabled: true
+
+  - name: amp_nan_guard
+    file: stability.yaml
+    severity: critical
+    hooks:
+      - on_backward_pass
+      - on_optimizer_step
+    enabled: true
+
+  - name: checkpoint_completeness
+    file: stability.yaml
+    severity: critical
+    hooks:
+      - on_checkpoint_save
+    enabled: true
+
+  - name: metric_consistency
+    file: reporting.yaml
+    severity: high
+    hooks:
+      - on_epoch_end
+    enabled: true
+
+  - name: log_format
+    file: reporting.yaml
+    severity: medium
+    hooks:
+      - on_log
+    enabled: true

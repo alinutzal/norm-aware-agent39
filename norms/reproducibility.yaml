@@ -1,0 +1,21 @@
+# Reproducibility norms
+deterministic_seed:
+  description: "Fixed seed must be set at training start"
+  check: "torch.initial_seed() must be set and logged"
+  severity: critical
+  auto_fix: true
+  suggested_fix: "Set seed in on_start hook"
+
+deterministic_algorithms:
+  description: "CUDA and cuDNN must use deterministic algorithms"
+  check: "torch.use_deterministic_algorithms(True) must be called"
+  severity: critical
+  auto_fix: true
+  suggested_fix: "Call torch.use_deterministic_algorithms(True) in on_start"
+
+no_dataloader_workers:
+  description: "num_workers must be 0 for reproducibility"
+  check: "DataLoader.num_workers == 0"
+  severity: high
+  auto_fix: true
+  suggested_fix: "Set num_workers=0 in data config"

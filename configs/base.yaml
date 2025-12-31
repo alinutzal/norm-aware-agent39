@@ -1,0 +1,50 @@
+# Base configuration: shared defaults across all experiments
+data:
+  dataset: cifar10
+  num_workers: 4
+  batch_size: 128
+  pin_memory: true
+  augmentation: true
+
+model:
+  arch: deit_tiny
+  pretrained: false
+  num_classes: 10
+
+training:
+  epochs: 100
+  lr: 0.001
+  weight_decay: 0.0001
+  optimizer: adamw
+  scheduler: cosine
+  warmup_epochs: 10
+  
+  # AMP settings
+  amp:
+    enabled: true
+    dtype: float16
+
+logging:
+  level: info
+  format: jsonl
+  save_every_n_batches: 100
+  save_metrics_every_n_epochs: 1
+
+reproducibility:
+  seed: 42
+  deterministic: true
+  benchmark: false
+
+checkpointing:
+  save_every_n_epochs: 10
+  keep_last_k: 3
+  save_best: true
+
+# Will be overridden by regime/mode/violation
+agent:
+  enabled: false
+  norm_aware: false
+
+norms:
+  enabled: false
+  registry_path: norms/registry.yaml
