@@ -1,0 +1,62 @@
+columns:
+  - name: age
+    dtype: int64
+    min: 18
+    max: 100
+  - name: job
+    dtype: object
+    allowed_values:
+      - "admin."
+      - "unknown"
+      - "unemployed"
+      - "management"
+      - "housemaid"
+      - "entrepreneur"
+      - "student"
+      - "blue-collar"
+      - "self-employed"
+      - "retired"
+      - "technician"
+      - "services"
+  - name: marital
+    dtype: object
+    allowed_values: ["married", "divorced", "single"]
+  - name: education
+    dtype: object
+    allowed_values: ["unknown", "secondary", "primary", "tertiary"]
+  - name: default
+    dtype: object
+    allowed_values: ["yes", "no"]
+  - name: balance
+    dtype: int64
+  - name: housing
+    dtype: object
+    allowed_values: ["yes", "no"]
+  - name: loan
+    dtype: object
+    allowed_values: ["yes", "no"]
+  - name: contact
+    dtype: object
+  - name: day
+    dtype: int64
+    min: 1
+    max: 31
+  - name: month
+    dtype: object
+    allowed_values: ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+  - name: duration
+    dtype: int64
+    min: 0
+  - name: campaign
+    dtype: int64
+    min: 0
+  - name: pdays
+    dtype: int64
+  - name: previous
+    dtype: int64
+    min: 0
+  - name: poutcome
+    dtype: object
+  - name: y
+    dtype: object
+    allowed_values: ["yes", "no"]
