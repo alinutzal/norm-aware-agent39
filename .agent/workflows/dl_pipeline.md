@@ -23,7 +23,7 @@ This workflow manages the complexities of GPU training, specifically addressing 
    Run the training script with flags to handle AMP (Automatic Mixed Precision) and gradient clipping. Anomaly detection is enabled to catch NaNs early.
    // turbo
    ```bash
-   python train_dl.py \
+   python src/train_dl.py \
      --config config/dl_model_v2.yaml \
      --use-amp true \
      --grad-clip 1.0 \
@@ -35,5 +35,5 @@ This workflow manages the complexities of GPU training, specifically addressing 
    Ensure the saved checkpoint can be loaded and inference produces valid outputs (not NaNs).
    // turbo
    ```bash
-   python scripts/verify_checkpoint.py --checkpoint checkpoints/run_001/best.pt
+   python src/verify_checkpoint.py --checkpoint checkpoints/run_001/best.pt
    ```
