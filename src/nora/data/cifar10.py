@@ -42,6 +42,7 @@ def get_cifar10_loaders(
     num_workers: int = 0,
     augment: bool = True,
     data_dir: str = "./data",
+    pin_memory: bool = True,
 ):
     """Get CIFAR-10 train and val dataloaders"""
     train_transform, val_transform = get_cifar10_transforms(augment=augment)
@@ -64,14 +65,14 @@ def get_cifar10_loaders(
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
 
     return train_loader, val_loader

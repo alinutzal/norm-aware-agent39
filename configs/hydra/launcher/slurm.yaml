@@ -1,0 +1,25 @@
+# @package hydra.launcher
+_target_: hydra_plugins.hydra_submitit_launcher.submitit_launcher.SlurmLauncher
+
+# SLURM configuration for single multi-GPU node
+account: m4439
+partition: debug
+qos: null
+constraint: gpu
+gpus_per_node: 4
+cpus_per_task: 4  # Divide CPUs across 4 tasks
+mem_gb: 64
+nodes: 1
+tasks_per_node: 4  # Run 4 configs in parallel on 4 GPUs
+time: 120  # minutes
+
+# Submitit settings
+timeout_min: ${hydra.launcher.time}
+max_num_timeout: 3
+submitit_folder: ${hydra.sweep.dir}/.submitit/%j
+name: ${hydra.job.name}
+
+# Additional SLURM options
+additional_parameters:
+  mail-type: FAIL
+  mail-user: ${oc.env:USER}@nersc.gov

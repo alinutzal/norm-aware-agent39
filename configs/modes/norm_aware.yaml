@@ -1,20 +1,16 @@
 # Norm-aware mode: NORA with agent orchestration
+modes: norm_aware
+
 agent:
   enabled: true
   norm_aware: true
-  reactive: false
+  reactive: true
   
-  # Agent behavior
-  observe_frequency: every_batch
-  decide_frequency: every_batch
+  observe_frequency: every_epoch
+  decide_frequency: every_epoch
   action_threshold: 0.1
-  
-  # Remediation
-  auto_fix: true
-  suggest_fixes: true
 
 logging:
   agent_logs: true
   decision_logs: true
   norm_logs: true
-  remediation_logs: true

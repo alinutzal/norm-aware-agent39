@@ -1,0 +1,18 @@
+# Main Hydra config - delegates to base.yaml
+defaults:
+  - base
+  - modes: norm_aware
+  - regime: balanced
+  - optional violation: none
+  - _self_
+
+hydra:
+  run:
+    dir: ${run.out_dir}
+  sweep:
+    dir: sweeps/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    name: ${project.name}
+    chdir: true
+  verbose: false

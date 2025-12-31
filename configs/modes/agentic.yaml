@@ -1,14 +1,16 @@
-# Agentic mode: reactive agent without norm awareness
+# Agentic mode: reactive agent that makes training decisions
+modes: agentic
+
 agent:
   enabled: true
-  norm_aware: false
-  reactive: true
+  norm_aware: false  # Not focused on norms, more on performance
+  reactive: true     # Responds to runtime conditions
   
-  # Agent behavior
-  observe_frequency: every_batch
+  observe_frequency: every_epoch
   decide_frequency: every_epoch
-  action_threshold: 0.5
+  action_threshold: 0.3
 
 logging:
   agent_logs: true
   decision_logs: true
+  norm_logs: false

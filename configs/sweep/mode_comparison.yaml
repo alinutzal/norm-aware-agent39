@@ -1,0 +1,13 @@
+# @package _global_
+
+# Sweep configuration for mode comparison
+defaults:
+  - override /hydra/launcher: slurm
+
+hydra:
+  sweeper:
+    params:
+      mode: pipeline,agentic,norm_aware
+      regime: strict,balanced,exploratory
+      seed: range(0,10)
+      train.batch_size: 128,256,512

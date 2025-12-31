@@ -1,0 +1,18 @@
+# Untracked config change violation
+name: untracked_config_change
+description: "Hyperparameters overridden at runtime without tracking in artifact manifest."
+severity: high
+
+# These will be overridden via CLI but not persisted in the saved config
+train:
+  batch_size: 512  # Override from CLI: train.batch_size=512
+  epochs: 10       # Override from CLI: train.epochs=10
+
+checkpoint:
+  # Don't save full config to artifacts
+  include_config: false
+  include_overrides: false
+
+# Flag for reporting to skip config validation
+reporting:
+  skip_config_validation: true

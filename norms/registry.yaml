@@ -1,73 +1,127 @@
-# Norm registry: catalog of all norms and their configuration
+# norms/registry.yaml
+schema_version: 1
+
+# Severity: minor | major | critical
+# Hook points: on_run_start, on_dataloader_built, on_batch_end, on_eval_start, on_eval_end, on_checkpoint_save, on_run_end
+# Remediation actions are suggestions; your agent can implement them or surface them.
+
 norms:
-  - name: deterministic_seed
-    file: reproducibility.yaml
+
+  - id: N-REPRO-001
+    name: "Global seeding & propagation"
+    category: reproducibility
+    severity: major
+    detect:
+      hook: on_run_start
+      checks:
+        - check_global_seed_set
+        - check_dataloader_worker_seeding
+    remediate:
+      enabled: true
+      actions:
+        - set_all_seeds
+        - enable_dataloader_worker_seed_init
+    evidence:
+      fields: [seed, repro.dataloader_seed_workers]
+
+  - id: N-REPRO-002
+    name: "Determinism controls (cudnn benchmark off, deterministic on)"
+    category: reproducibility
+    severity: major
+    detect:
+      hook: on_run_start
+      checks:
+        - check_deterministic_flags
+        - check_cudnn_benchmark_off
+    remediate:
+      enabled: true
+      actions:
+        - set_torch_deterministic
+        - disable_cudnn_benchmark
+    evidence:
+      fields: [repro.deterministic, repro.cudnn_benchmark]
+
+  - id: N-STAB-001
+    name: "AMP stability (GradScaler + NaN/Inf guard)"
+    category: stability
     severity: critical
-    hooks:
-      - on_start
-      - on_epoch_start
-    enabled: true
+    detect:
+      hook: on_batch_end
+      checks:
+        - check_loss_is_finite
+        - check_grad_is_finite
+        - check_grad_scaler_enabled_when_amp
+    remediate:
+      enabled: true
+      actions:
+        - enable_grad_scaler
+        - reduce_lr
+        - increase_warmup
+        - rerun_from_last_good_checkpoint
+    evidence:
+      fields: [amp.enabled, amp.grad_scaler, optimizer.lr, scheduler.warmup_epochs]
 
-  - name: deterministic_algorithms
-    file: reproducibility.yaml
+  - id: N-VALID-001
+    name: "Eval protocol correctness (model.eval during validation)"
+    category: validity
     severity: critical
-    hooks:
-      - on_start
-    enabled: true
+    detect:
+      hook: on_eval_start
+      checks:
+        - check_model_in_eval_mode
+    remediate:
+      enabled: true
+      actions:
+        - set_model_eval_mode
+        - rerun_evaluation
+    evidence:
+      fields: [model_mode]
 
-  - name: no_dataloader_workers
-    file: reproducibility.yaml
-    severity: high
-    hooks:
-      - on_start
-    enabled: true
+  - id: N-VALID-002
+    name: "No augmentation leakage into evaluation"
+    category: validity
+    severity: major
+    detect:
+      hook: on_dataloader_built
+      checks:
+        - check_eval_transforms_are_deterministic
+    remediate:
+      enabled: true
+      actions:
+        - disable_eval_augmentation
+        - rebuild_eval_dataloader
+        - rerun_evaluation
+    evidence:
+      fields: [dataset.eval_augment]
 
-  - name: eval_mode_enforced
-    file: validity.yaml
-    severity: critical
-    hooks:
-      - on_eval_start
-    enabled: true
+  - id: N-REPRO-003
+    name: "Checkpoint completeness (optimizer/scheduler/scaler)"
+    category: reproducibility
+    severity: major
+    detect:
+      hook: on_checkpoint_save
+      checks:
+        - check_checkpoint_contains_required_state
+    remediate:
+      enabled: true
+      actions:
+        - save_full_training_state
+    evidence:
+      fields: [checkpoint.include_optimizer, checkpoint.include_scheduler, checkpoint.include_scaler]
 
-  - name: no_augmentation_on_eval
-    file: validity.yaml
-    severity: critical
-    hooks:
-      - on_eval_start
-    enabled: true
-
-  - name: train_mode_enforced
-    file: validity.yaml
-    severity: high
-    hooks:
-      - on_train_start
-    enabled: true
-
-  - name: amp_nan_guard
-    file: stability.yaml
-    severity: critical
-    hooks:
-      - on_backward_pass
-      - on_optimizer_step
-    enabled: true
-
-  - name: checkpoint_completeness
-    file: stability.yaml
-    severity: critical
-    hooks:
-      - on_checkpoint_save
-    enabled: true
-
-  - name: metric_consistency
-    file: reporting.yaml
-    severity: high
-    hooks:
-      - on_epoch_end
-    enabled: true
-
-  - name: log_format
-    file: reporting.yaml
-    severity: medium
-    hooks:
-      - on_log
-    enabled: true
+  - id: N-REPORT-001
+    name: "Multi-seed reporting with uncertainty"
+    category: reporting
+    severity: major
+    detect:
+      hook: on_run_end
+      checks:
+        - check_multi_seed_summary_present
+        - check_mean_std_reported
+    remediate:
+      enabled: true
+      actions:
+        - schedule_additional_seeds
+        - regenerate_report
+    evidence:
+      fields: [metrics.report_mean_std, reporting.require_multi_seed]

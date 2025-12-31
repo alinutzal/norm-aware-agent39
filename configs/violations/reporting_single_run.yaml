@@ -1,0 +1,10 @@
+# Single-run reporting violation
+name: reporting_single_run
+description: "Disable multi-seed and uncertainty reporting."
+severity: medium
+
+reporting:
+  require_multi_seed: false
+
+metrics:
+  report_mean_std: false

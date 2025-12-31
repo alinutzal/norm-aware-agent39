@@ -1,0 +1,24 @@
+# configs/regime/exploratory.yaml
+# Exploratory regime: Very tolerant, log-only
+regime: exploratory
+
+agent:
+  strategy: exploratory
+  halt_on_violations: false
+  auto_fix: false
+  suggest_fixes: true
+  log_level: info
+  require_validation: false
+  violation_tolerance: 99  # Very tolerant
+  max_retries: 0
+
+repro:
+  deterministic: false  # Allow non-determinism in exploratory
+  cudnn_benchmark: true
+  dataloader_seed_workers: false
+
+checkpoint:
+  include_config: true
+  include_overrides: false  # More lightweight
+  save_best: false  # Only save final
+  save_every_epochs: 0

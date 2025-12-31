@@ -1,11 +1,15 @@
-# Violation: introduce AMP NaN/Inf issues
-violations:
+# AMP NaN/Inf violation
+name: amp_nan
+description: "Trigger AMP instability by disabling GradScaler and warmup (often yields NaN/Inf)."
+severity: high
+
+amp:
   enabled: true
-  active:
-    - amp_nan
-  
-  amp_nan:
-    inject_nans: true
-    inject_infs: true
-    skip_nan_checks: true
-    large_loss_scaling: true
+  grad_scaler: false
+  loss_nan_policy: ignore
+
+scheduler:
+  warmup_epochs: 0
+
+optimizer:
+  lr: 8e-4

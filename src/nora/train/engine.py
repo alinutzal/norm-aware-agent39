@@ -17,6 +17,7 @@ def train_epoch(
     optimizer: torch.optim.Optimizer,
     device: torch.device = torch.device("cpu"),
     scaler: torch.cuda.amp.GradScaler = None,
+    amp_dtype: torch.dtype = torch.float16,
 ) -> Tuple[float, float]:
     """Train for one epoch"""
     model.train()
@@ -30,7 +31,7 @@ def train_epoch(
         optimizer.zero_grad()
 
         if scaler is not None:
-            with torch.cuda.amp.autocast():
+            with torch.amp.autocast(device_type="cuda", dtype=amp_dtype):
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
 

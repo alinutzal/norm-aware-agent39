@@ -1,0 +1,14 @@
+# Missing seed propagation violation
+name: missing_seed
+description: "Seed not propagated to dataloader, torch, numpy - reproducibility breaks."
+severity: medium
+
+repro:
+  deterministic: true
+  cudnn_benchmark: false
+
+train:
+  # Intentionally don't use seed in dataloader/torch setup
+  skip_seed_init: true
+
+seed: null  # Explicitly null - no seed set

@@ -130,3 +130,4 @@ runs/
 *.json
 outputs/
 logs/
+data/

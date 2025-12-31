@@ -1,0 +1,24 @@
+# configs/regime/strict.yaml
+# Strict regime: Halt on any violation, zero tolerance
+regime: strict
+
+agent:
+  strategy: strict
+  halt_on_violations: true
+  auto_fix: false
+  suggest_fixes: true
+  log_level: error
+  require_validation: true
+  violation_tolerance: 0  # No tolerance
+  max_retries: 1
+
+repro:
+  deterministic: true
+  cudnn_benchmark: false
+  dataloader_seed_workers: true
+
+checkpoint:
+  include_config: true
+  include_overrides: true
+  save_best: true
+  save_every_epochs: 5

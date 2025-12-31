@@ -1,0 +1,13 @@
+# @package _global_
+
+# Sweep configuration for violation study
+defaults:
+  - override /hydra/launcher: slurm
+
+hydra:
+  sweeper:
+    params:
+      violation: none,nondeterminism,amp_nan,eval_mode_bug,aug_leak,checkpoint_incomplete
+      mode: norm_aware,pipeline
+      regime: strict,balanced
+      seed: 42,123,456

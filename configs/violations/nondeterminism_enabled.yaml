@@ -1,0 +1,15 @@
+# Explicit non-determinism violation
+name: nondeterminism_enabled
+description: "Explicitly disable deterministic algorithms and enable cuDNN benchmark for speed."
+severity: high
+
+repro:
+  deterministic: false
+  cudnn_benchmark: true
+  dataloader_seed_workers: false
+
+optimizer:
+  lr: 1e-3  # Also change LR to make it detectable
+
+checkpoint:
+  include_optimizer: false

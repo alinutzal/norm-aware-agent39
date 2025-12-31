@@ -8,51 +8,100 @@ NORA (Norm-Aware Agent) is a framework for detecting and mitigating training vio
 
 ## Quick Start
 
-### NORA Vision Model Training
+### Installation
 ```bash
 # Install dependencies
 pip install -e .
 
-# Run a single experiment
-python -m nora train --config configs/base.yaml --mode norm_aware --regime balanced
+# Create required directories
+mkdir -p data/raw data/processed logs
+```
+
+### NORA Vision Model Training
+```bash
+# Run a single experiment (uses default: norm_aware mode, balanced regime)
+python -m nora train
+
+# Override mode and regime
+python -m nora train mode=pipeline regime=strict
 
 # Run with a specific violation injected
-python -m nora train --config configs/base.yaml --violation nondeterminism
+python -m nora train violation=nondeterminism seed=42
 
-# Generate experiment matrix (mode × regime × violation × seeds)
-bash scripts/run_matrix.sh
+# Short training run for testing
+python -m nora train train.epochs=2 seed=42
+
+# Available modes: pipeline, agentic, norm_aware
+# Available regimes: strict, balanced, exploratory
+# Available violations: none, nondeterminism, amp_nan, eval_mode_bug, aug_leak, checkpoint_incomplete, reporting_single_run
 ```
 
 ### ML Pipeline (Bank Marketing Classification)
 ```bash
 # Full pipeline: validate → build features → train → evaluate
-bash scripts/ml_pipeline.sh data/bank-marketing.csv ./ml_output
+bash scripts/ml_pipeline.sh
 
 # Or individual commands
-python -m nora ml validate --input data/bank-marketing.csv --schema configs/ml/schema.yaml
-python -m nora ml build-features --input data/bank-marketing.csv --output data/features --seed 42
-python -m nora ml train --input data/features/train.parquet --config configs/ml/model_params.yaml --output models/model.pkl
-python -m nora ml evaluate --model models/model.pkl --test-set data/features/test.parquet --output reports/metrics.json
+python -m nora ml validate --input data/bank-full.csv --schema config/schema.yaml
+python -m nora ml build-features --input data/bank-full.csv --output data/processed/bank_marketing --seed 42
+python -m nora ml train --input data/processed/bank_marketing/train.parquet --config config/model_params.yaml --output models/model.pkl
+python -m nora ml evaluate --model models/model.pkl --test-set data/processed/bank_marketing/test.parquet --output reports/metrics.json
 ```
 
 ## Directory Structure
 
-- **configs/** - Configuration files for base, regimes, modes, and violations
-- **norms/** - Norm definitions and registry
-- **scripts/** - Experiment automation and analysis scripts
-- **src/nora/** - Core package implementation
-- **tests/** - Unit and integration tests
-- **docker/** - Container definitions
-- **runs/** - Experiment outputs (gitignored)
+```
+norm-aware-agent39/
+├── configs/                    # Hydra configuration files
+│   ├── base.yaml              # Main training config
+│   ├── config.yaml            # Hydra composition root
+│   ├── modes/                 # Execution modes (pipeline, agentic, norm_aware)
+│   ├── regimes/               # Strictness levels (strict, balanced, exploratory)
+│   ├── violations/            # Violation profiles for testing
+│   ├── hydra/launcher/        # SLURM launcher config
+│   ├── sweep/                 # Sweep configurations
+│   └── ml/                    # ML pipeline configs
+├── src/nora/                  # Core package
+│   ├── train/                 # Training engine and runner
+│   ├── models/                # Model definitions (ViT)
+│   ├── data/                  # Data loaders (CIFAR-10, bank marketing)
+│   ├── violations/            # Violation injection system
+│   ├── norms/                 # Norm definitions
+│   ├── agent/                 # Agent orchestration
+│   └── cli.py                 # CLI entry point
+├── scripts/                   # Experiment automation
+│   ├── submit_sweep.sh        # SLURM sweep submission
+│   ├── submit_single.sh       # Single SLURM job
+│   ├── submit_array.sh        # SLURM array jobs
+│   └── ml_pipeline.sh         # ML pipeline orchestration
+├── data/                      # Data directory (gitignored)
+│   ├── raw/                   # Raw datasets (CIFAR-10, bank-full.csv)
+│   └── processed/             # Processed features
+└── outputs/                   # Hydra outputs (gitignored)
+```
 
 ## Configuration
 
-NORA uses hierarchical YAML configuration:
+NORA uses Hydra for hierarchical configuration composition:
 
-1. **Base config** (`configs/base.yaml`) - Shared defaults
-2. **Regime** (`configs/regimes/*.yaml`) - Strictness level
-3. **Mode** (`configs/modes/*.yaml`) - Execution mode
-4. **Violation** (`configs/violations/*.yaml`) - Injected bugs
+1. **Base config** (`configs/base.yaml`) - Core training hyperparameters, dataset, model, optimizer, scheduler, AMP, reproducibility settings
+2. **Mode** (`configs/modes/*.yaml`) - Execution mode: pipeline (standard), agentic (reactive), norm_aware (proactive)
+3. **Regime** (`configs/regimes/*.yaml`) - Strictness level: strict, balanced, exploratory
+4. **Violation** (`configs/violations/*.yaml`) - Optional violation injection for testing agent responses
+
+Configuration is composed via `configs/config.yaml` with Hydra's defaults system:
+```yaml
+defaults:
+  - base
+  - mode: norm_aware      # Override with mode=<name>
+  - regime: balanced      # Override with regime=<name>
+  - optional violation: none  # Override with violation=<name>
+```
+
+Override any parameter from command line:
+```bash
+python -m nora train mode=agentic train.epochs=50 optimizer.lr=1e-3
+```
 
 ## Norms
 
@@ -67,19 +116,63 @@ See `norms/` for detailed definitions.
 
 ## Running Experiments
 
-### Single Run
+### Local Execution
+
+**Single run:**
 ```bash
-bash scripts/run_one.sh configs/base.yaml norm_aware balanced
+python -m nora train mode=norm_aware regime=balanced seed=42
 ```
 
-### Multiple Seeds
+**Parameter sweep (sequential):**
 ```bash
-bash scripts/run_seeds.sh configs/base.yaml norm_aware balanced 10
+python -m nora train --multirun mode=pipeline,norm_aware seed=42,123,456
 ```
 
-### Full Matrix
+### SLURM Cluster Execution
+
+**Before running on SLURM**, update your account in `configs/hydra/launcher/slurm.yaml`:
+```yaml
+account: m4439  # Your allocation
+```experimental results:
+
 ```bash
-bash scripts/run_matrix.sh
+python scripts/make_tables.py --run-dir outputs/
+python scripts/make_figures.py --run-dir outputs/
+```
+
+Check violation events and norm compliance:
+```bash
+# View events from a run
+cat outputs/<run_id>/norms/events.jsonl | jq .
+
+# Aggregate metrics across seeds
+python -m nora analyze --sweep-dir sweeps/<date>/<time>
+```
+
+**Multi-run sweep with Hydra SLURM launcher:**
+```bash
+python -m nora train \
+    --multirun \
+    hydra/launcher=slurm \
+    mode=pipeline,agentic,norm_aware \
+    regime=strict,balanced,exploratory \
+    seed=42,123,456
+```
+
+**Full experimental matrix (162 jobs):**
+```bash
+python -m nora train \
+    --multirun \
+    hydra/launcher=slurm \
+    mode=pipeline,agentic,norm_aware \
+    regime=strict,balanced,exploratory \
+    violation=none,nondeterminism,amp_nan,eval_mode_bug,aug_leak,checkpoint_incomplete \
+    seed=42,123,456
+```
+
+**Monitor jobs:**
+```bash
+squeue --me
 ```
 
 ## Analysis

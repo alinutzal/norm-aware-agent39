@@ -1,9 +1,10 @@
-# Violation: augmentation applied to eval set
-violations:
-  enabled: true
-  active:
-    - aug_leak
-  
-  aug_leak:
-    augment_eval_data: true
-    skip_aug_guard: true
+# Augmentation leakage violation
+name: aug_leak
+description: "Apply stochastic augmentation to evaluation data (protocol violation)."
+severity: high
+
+dataset:
+  eval_augment:
+    random_crop: true
+    crop_padding: 4
+    hflip: true

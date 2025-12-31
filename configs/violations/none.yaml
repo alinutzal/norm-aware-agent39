@@ -1,4 +1,4 @@
-# No violations: clean training
-violations:
-  enabled: false
-  active: []
+# No violations - baseline configuration
+name: none
+description: "No injected violations - baseline training."
+severity: null

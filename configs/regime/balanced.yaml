@@ -1,0 +1,24 @@
+# configs/regime/balanced.yaml
+# Balanced regime: Auto-remediate violations, tolerate up to 1 low-severity issue
+regime: balanced
+
+agent:
+  strategy: balanced
+  halt_on_violations: false
+  auto_fix: true
+  suggest_fixes: true
+  log_level: warning
+  require_validation: false
+  violation_tolerance: 1  # Allow 1 low-severity violation
+  max_retries: 3
+
+repro:
+  deterministic: true
+  cudnn_benchmark: false
+  dataloader_seed_workers: true
+
+checkpoint:
+  include_config: true
+  include_overrides: true
+  save_best: true
+  save_every_epochs: 0
