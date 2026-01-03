@@ -1,0 +1,9 @@
+# Excessive dataloader workers violation
+name: excessive_workers
+description: "Using too many dataloader workers, wasting CPU resources"
+severity: low
+
+seed: 42
+
+dataset:
+  num_workers: 32  # Excessive for single GPU (normal: 4-8)

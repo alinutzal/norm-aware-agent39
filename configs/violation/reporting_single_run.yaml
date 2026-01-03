@@ -3,6 +3,8 @@ name: reporting_single_run
 description: "Disable multi-seed and uncertainty reporting."
 severity: medium
 
+seed: 42
+
 reporting:
   require_multi_seed: false
 

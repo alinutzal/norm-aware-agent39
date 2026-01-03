@@ -8,7 +8,7 @@ NORA supports three **execution modes** that can be combined with three **enforc
 
 ### Execution Modes
 - **pipeline**: Standard training without agent (baseline)
-- **agentic**: Reactive agent for training optimization
+- **agentic**: Reactive agent for training optimization (performance-based decisions)
 - **norm_aware**: Agent with reproducibility norm enforcement (NORA focus)
 
 ### Enforcement Regimes
@@ -17,6 +17,20 @@ NORA supports three **execution modes** that can be combined with three **enforc
 - **exploratory**: Very tolerant - log-only, no remediation
 
 ## Quick Start
+
+### Run Agentic Mode (Performance Optimization)
+```bash
+python -m nora train \
+    modes=agentic \
+    regime=balanced \
+    train.epochs=50
+```
+
+**Expected behavior:**
+- Agent observes training metrics each epoch
+- Automatically reduces learning rate if loss explodes or stagnates
+- Early stops if overfitting detected (strict regime only)
+- Saves agent decisions to `runs/*/norms/agent_decisions.jsonl`
 
 ### Run Agent-Based Training (Balanced Regime)
 ```bash
@@ -48,6 +62,36 @@ python -m nora train \
 - No remediation attempted
 
 ## Agent Behavior by Regime
+
+### Agentic Mode (Performance-Based)
+
+Agent observes training state and makes performance-based decisions:
+
+**Balanced Regime:**
+```yaml
+regime: balanced
+agent:
+  norm_aware: false  # Focus on performance, not norms
+  auto_fix: true
+```
+
+**Actions:**
+1. **Loss explosion** (loss > 100) → Reduce LR by 0.5x
+2. **Loss stagnation** (< 0.01 variance over 5 epochs) → Reduce LR by 0.1x
+3. **Validation loss increasing** (3+ epochs) → Reduce LR by 0.5x
+
+**Strict Regime:**
+```yaml
+regime: strict
+agent:
+  halt_on_violations: true
+```
+
+**Actions:**
+1. Same as balanced for loss issues
+2. **Validation loss increasing** (3+ epochs) → **Early stop** (prevents overfitting)
+
+**Result:** Training adapts to performance issues automatically
 
 ### Balanced Regime
 ```yaml
@@ -153,7 +197,21 @@ Summary statistics:
   "warnings": 1,
   "remediation_success_count": 2,
   "regime": "balanced",
-  "mode": "norm_aware"
+  "mode": "norm_aware",
+  "norm_aware": true
+}
+```
+
+**For agentic mode:**
+```json
+{
+  "total_decisions": 5,
+  "lr_adjustments": 3,
+  "early_stop_recommended": false,
+  "epochs_observed": 50,
+  "regime": "balanced",
+  "mode": "agentic",
+  "norm_aware": false
 }
 ```
 
@@ -172,7 +230,22 @@ Reproducibility monitoring metrics:
 
 ## Configuration Examples
 
-### Example 1: Balanced with Violation Injection
+### Example 1: Agentic Mode with High Learning Rate
+```bash
+python -m nora train \
+    modes=agentic \
+    regime=balanced \
+    optimizer.lr=0.1 \
+    train.epochs=50
+```
+
+Agent will:
+- Detect loss explosion from high LR
+- Automatically reduce LR by 0.5x
+- Continue training with corrected LR
+- Log all LR adjustments to agent_decisions.jsonl
+
+### Example 2: Balanced with Violation Injection
 ```bash
 python -m nora train \
     modes=norm_aware \
@@ -307,6 +380,12 @@ for d in runs/multirun_*/*/; do
   cat "$d/norms/agent_metrics.json" | python -m json.tool
 done
 ```
+
+### Use Weave only for:
+
+- **violation detection** - Track when violations are discovered and their evidence
+- **remediation logic** - Instrument fix attempts and their outcomes
+- **control-flow transparency** - Trace agent decision pathways and regime-specific behavior
 
 ## Next Steps
 

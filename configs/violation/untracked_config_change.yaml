@@ -3,6 +3,8 @@ name: untracked_config_change
 description: "Hyperparameters overridden at runtime without tracking in artifact manifest."
 severity: high
 
+seed: 42
+
 # These will be overridden via CLI but not persisted in the saved config
 train:
   batch_size: 512  # Override from CLI: train.batch_size=512

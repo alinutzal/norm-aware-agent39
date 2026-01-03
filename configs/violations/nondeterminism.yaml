@@ -1,9 +1,0 @@
-# Silent non-determinism violation
-name: nondeterminism
-description: "Enable non-determinism via cuDNN benchmark and disabled dataloader worker seeding."
-severity: high
-
-repro:
-  deterministic: false
-  cudnn_benchmark: true
-  dataloader_seed_workers: false

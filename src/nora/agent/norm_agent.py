@@ -9,6 +9,7 @@ from datetime import datetime
 import time
 
 import torch
+from omegaconf import OmegaConf
 
 from ..norms.reproducibility_monitor import ReproducibilityNormMonitor
 
@@ -37,18 +38,26 @@ class NormAgent:
         mode: str = "norm_aware",
         events_file: str = None,
         cfg: Any = None,
+        norm_aware: bool = True,
     ):
         self.regime = regime  # balanced, strict, exploratory
         self.mode = mode  # pipeline, agentic, norm_aware
+        self.norm_aware = norm_aware  # True for norm_aware, False for agentic
         self.cfg = cfg
         self.events_file = events_file
         self.decisions: list = []
         self.remediation_count = 0
         self.halt_count = 0
+        
+        # Performance tracking for agentic mode
+        self.performance_history = []
+        self.lr_adjustments = 0
+        self.early_stop_recommended = False
 
         # Regime-specific behavior
         self.strategy = self._get_strategy(regime)
-        logger.info(f"Initialized NormAgent: regime={regime}, mode={mode}, strategy={self.strategy}")
+        mode_type = "norm-aware" if norm_aware else "performance-optimizing"
+        logger.info(f"Initialized NormAgent: regime={regime}, mode={mode} ({mode_type}), strategy={self.strategy}")
 
     def _get_strategy(self, regime: str) -> Dict[str, Any]:
         """Define agent behavior for each regime"""
@@ -196,6 +205,28 @@ class NormAgent:
                 },
                 "description": "Save complete checkpoint state",
             },
+            "excessive_batch_size": {
+                "action": "reduce_batch_size",
+                "parameters": {
+                    "batch_size": 512,
+                },
+                "description": "Reduce batch size to 512 to save memory",
+            },
+            "inefficient_precision": {
+                "action": "enable_amp",
+                "parameters": {
+                    "amp_enabled": True,
+                    "dtype": "fp16",
+                },
+                "description": "Enable mixed precision training for efficiency",
+            },
+            "excessive_workers": {
+                "action": "reduce_workers",
+                "parameters": {
+                    "num_workers": 8,
+                },
+                "description": "Reduce dataloader workers to 8",
+            },
         }
         return fixes.get(violation_name, {"description": "No standard fix available"})
 
@@ -240,27 +271,75 @@ class NormAgent:
         
         try:
             if violation_name == "missing_seed":
-                cfg.seed = suggested_fix["parameters"]["seed"]
-                cfg.repro.deterministic = True
-                cfg.repro.cudnn_benchmark = False
-                return True, "Restored seed and determinism"
+                # Use bracket notation which works for both dict and OmegaConf
+                cfg["seed"] = suggested_fix["parameters"]["seed"]
+                return True, "Restored seed"
 
             elif violation_name == "nondeterminism_enabled":
-                cfg.repro.deterministic = True
-                cfg.repro.cudnn_benchmark = False
-                cfg.repro.dataloader_seed_workers = True
+                if "repro" in cfg:
+                    cfg["repro"]["deterministic"] = True
+                    cfg["repro"]["cudnn_benchmark"] = False
+                    cfg["repro"]["dataloader_seed_workers"] = True
                 return True, "Restored determinism"
 
             elif violation_name == "untracked_config_change":
-                cfg.checkpoint.include_config = True
-                cfg.checkpoint.include_overrides = True
+                if "checkpoint" in cfg:
+                    cfg["checkpoint"]["include_config"] = True
+                    cfg["checkpoint"]["include_overrides"] = True
                 return True, "Enabled config persistence"
 
             elif violation_name == "amp_nan":
-                cfg.amp.grad_scaler = True
-                cfg.scheduler.warmup_epochs = 5
-                cfg.amp.loss_nan_policy = "halt"
+                if "amp" in cfg:
+                    cfg["amp"]["grad_scaler"] = True
+                if "scheduler" in cfg:
+                    cfg["scheduler"]["warmup_epochs"] = 5
+                if "amp" in cfg:
+                    cfg["amp"]["loss_nan_policy"] = "halt"
                 return True, "Fixed AMP configuration"
+
+            elif violation_name == "excessive_batch_size":
+                if "train" in cfg:
+                    cfg["train"]["batch_size"] = 512
+                return True, "Reduced batch size to 512"
+
+            elif violation_name == "inefficient_precision":
+                if "amp" in cfg:
+                    cfg["amp"]["enabled"] = True
+                cfg["dtype"] = "fp16"
+                return True, "Enabled mixed precision training"
+
+            elif violation_name == "excessive_workers":
+                if "dataset" in cfg:
+                    cfg["dataset"]["num_workers"] = 8
+                return True, "Reduced dataloader workers to 8"
+
+            elif violation_name == "eval_mode_bug":
+                if "train" in cfg:
+                    cfg["train"]["force_eval_mode"] = True
+                return True, "Enabled model eval mode during validation"
+
+            elif violation_name == "aug_leak":
+                if "dataset" in cfg:
+                    cfg["dataset"]["eval_augment"] = {
+                        "random_crop": False,
+                        "crop_padding": 0,
+                        "hflip": False,
+                    }
+                return True, "Disabled augmentation on eval data"
+
+            elif violation_name == "reporting_single_run":
+                if "reporting" in cfg:
+                    cfg["reporting"]["require_multi_seed"] = True
+                if "metrics" in cfg:
+                    cfg["metrics"]["report_mean_std"] = True
+                return True, "Enabled multi-seed reporting with uncertainty"
+
+            elif violation_name == "checkpoint_incomplete":
+                if "checkpoint" in cfg:
+                    cfg["checkpoint"]["include_optimizer"] = True
+                    cfg["checkpoint"]["include_scheduler"] = True
+                    cfg["checkpoint"]["include_scaler"] = True
+                return True, "Enabled complete checkpoint saving"
 
             return False, f"No remediation available for {violation_name}"
 
@@ -283,7 +362,7 @@ class NormAgent:
         halts = len([d for d in self.decisions if d.action == "halt"])
         warnings = len([d for d in self.decisions if d.action == "warn"])
 
-        return {
+        metrics = {
             "total_decisions": total_decisions,
             "auto_fixes": auto_fixes,
             "halts": halts,
@@ -291,4 +370,124 @@ class NormAgent:
             "remediation_success_count": self.remediation_count,
             "regime": self.regime,
             "mode": self.mode,
+            "norm_aware": self.norm_aware,
         }
+        
+        # Add agentic-specific metrics
+        if not self.norm_aware:
+            metrics.update({
+                "lr_adjustments": self.lr_adjustments,
+                "early_stop_recommended": self.early_stop_recommended,
+                "epochs_observed": len(self.performance_history),
+            })
+        
+        return metrics
+
+    def observe_training_state(self, epoch: int, train_metrics: Dict[str, float], val_metrics: Dict[str, float]) -> None:
+        """
+        Observe training state for agentic mode.
+        Called after each epoch to track performance.
+        """
+        if self.norm_aware:
+            # Norm-aware mode doesn't need runtime observation
+            return
+        
+        state = {
+            "epoch": epoch,
+            "train_loss": train_metrics.get("train_loss", float("inf")),
+            "train_acc": train_metrics.get("train_acc", 0.0),
+            "val_loss": val_metrics.get("val_loss", float("inf")),
+            "val_acc": val_metrics.get("val_acc", 0.0),
+        }
+        self.performance_history.append(state)
+        logger.debug(f"Agentic agent observed epoch {epoch}: val_loss={state['val_loss']:.4f}, val_acc={state['val_acc']:.2f}%")
+
+    def decide_training_action(self, current_lr: float) -> Dict[str, Any]:
+        """
+        Make performance-based training decisions (agentic mode only).
+        Returns action to take (continue, adjust_lr, early_stop).
+        """
+        if self.norm_aware or len(self.performance_history) < 2:
+            return {"action": "continue"}
+        
+        current = self.performance_history[-1]
+        previous = self.performance_history[-2]
+        
+        # Check for training issues
+        decision = {"action": "continue", "reason": None}
+        
+        # 1. Check for loss explosion
+        if current["train_loss"] > 100.0 or current["val_loss"] > 100.0:
+            decision = {
+                "action": "reduce_lr",
+                "factor": 0.5,
+                "reason": "Loss explosion detected",
+            }
+            self.lr_adjustments += 1
+            logger.warning(f"Agentic: Loss explosion (train={current['train_loss']:.2f}, val={current['val_loss']:.2f})")
+        
+        # 2. Check for validation loss increase (potential overfitting)
+        elif len(self.performance_history) >= 3:
+            recent_val_losses = [h["val_loss"] for h in self.performance_history[-3:]]
+            if all(recent_val_losses[i] < recent_val_losses[i+1] for i in range(len(recent_val_losses)-1)):
+                if self.regime == "strict":
+                    decision = {
+                        "action": "early_stop",
+                        "reason": "Validation loss increasing for 3 consecutive epochs",
+                    }
+                    self.early_stop_recommended = True
+                    logger.warning("Agentic (strict): Early stop recommended - overfitting detected")
+                else:
+                    decision = {
+                        "action": "reduce_lr",
+                        "factor": 0.5,
+                        "reason": "Validation loss increasing - attempting LR reduction",
+                    }
+                    self.lr_adjustments += 1
+        
+        # 3. Check for stagnation (loss not decreasing)
+        elif len(self.performance_history) >= 5:
+            recent_val_losses = [h["val_loss"] for h in self.performance_history[-5:]]
+            loss_variance = max(recent_val_losses) - min(recent_val_losses)
+            if loss_variance < 0.01:  # Very little change
+                decision = {
+                    "action": "reduce_lr",
+                    "factor": 0.1,
+                    "reason": "Loss stagnation detected",
+                }
+                self.lr_adjustments += 1
+                logger.info("Agentic: Loss stagnation - reducing LR aggressively")
+        
+        # Record decision
+        if decision["action"] != "continue":
+            agent_decision = AgentDecision(
+                action=decision["action"],
+                severity="medium",
+                message=f"Agentic decision: {decision['action']} - {decision.get('reason', 'performance optimization')}",
+                suggested_fix=decision,
+                timestamp=datetime.utcnow().isoformat() + "Z",
+            )
+            self.decisions.append(agent_decision)
+            self._record_agentic_decision(agent_decision, current)
+        
+        return decision
+
+    def _record_agentic_decision(self, decision: AgentDecision, state: Dict[str, Any]) -> None:
+        """Record agentic decision to events file"""
+        if not self.events_file:
+            return
+
+        event = {
+            "timestamp": decision.timestamp,
+            "event_type": "AGENTIC_DECISION",
+            "agent_action": decision.action,
+            "regime": self.regime,
+            "mode": self.mode,
+            "message": decision.message,
+            "suggested_fix": decision.suggested_fix,
+            "training_state": state,
+        }
+
+        Path(self.events_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(self.events_file, "a") as f:
+            f.write(json.dumps(event, default=str) + "\n")

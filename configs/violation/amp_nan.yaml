@@ -3,6 +3,8 @@ name: amp_nan
 description: "Trigger AMP instability by disabling GradScaler and warmup (often yields NaN/Inf)."
 severity: high
 
+seed: 42
+
 amp:
   enabled: true
   grad_scaler: false

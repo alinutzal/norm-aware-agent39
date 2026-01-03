@@ -2,3 +2,5 @@
 name: none
 description: "No injected violations - baseline training."
 severity: null
+
+seed: 42

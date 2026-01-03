@@ -11,4 +11,4 @@ train:
   # Intentionally don't use seed in dataloader/torch setup
   skip_seed_init: true
 
-seed: null  # Explicitly null - no seed set
+# Don't set seed at all - let base config seed be used but flag skip_seed_init

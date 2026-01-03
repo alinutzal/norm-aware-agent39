@@ -66,8 +66,9 @@ amp:
   loss_nan_policy: halt     # halt | warn | ignore
 
 repro:
-  deterministic: true
-  cudnn_benchmark: false
+  deterministic: false
+  cudnn_benchmark: true
+  cudnn_deterministic: false
   set_float32_matmul_precision: high   # highest | high | medium (torch>=2)
   dataloader_seed_workers: true
 
@@ -95,3 +96,7 @@ reporting:
     - env
     - hardware
     - seeds
+
+wandb:
+  enabled: false  # Set to true to enable Weights & Biases logging
+  project: norm-aware-ml

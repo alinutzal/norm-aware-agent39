@@ -20,5 +20,5 @@ repro:
 checkpoint:
   include_config: true
   include_overrides: false  # More lightweight
-  save_best: false  # Only save final
+  save_best: true  # Save best in exploratory too
   save_every_epochs: 0

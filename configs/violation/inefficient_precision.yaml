@@ -1,0 +1,11 @@
+# Inefficient precision violation
+name: inefficient_precision
+description: "Using full precision when mixed precision would suffice"
+severity: low
+
+seed: 42
+
+amp:
+  enabled: false  # Should use AMP for efficiency
+
+dtype: fp32  # Inefficient, should use fp16/bf16

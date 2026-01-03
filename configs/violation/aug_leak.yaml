@@ -3,6 +3,8 @@ name: aug_leak
 description: "Apply stochastic augmentation to evaluation data (protocol violation)."
 severity: high
 
+seed: 42
+
 dataset:
   eval_augment:
     random_crop: true

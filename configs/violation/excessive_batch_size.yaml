@@ -1,0 +1,9 @@
+# Excessive batch size violation
+name: excessive_batch_size
+description: "Using unnecessarily large batch size that wastes memory"
+severity: medium
+
+seed: 42
+
+train:
+  batch_size: 2048  # Excessive for CIFAR-10 (normal: 128-512)

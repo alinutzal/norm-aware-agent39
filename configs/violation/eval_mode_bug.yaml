@@ -3,6 +3,8 @@ name: eval_mode_bug
 description: "Validation runs without switching model to eval() (dropout/BN behave incorrectly)."
 severity: high
 
+seed: 42
+
 train:
   # Your engine should honor this flag by skipping model.eval() at eval time
   force_eval_mode: false

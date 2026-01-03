@@ -13,6 +13,18 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    WANDB_AVAILABLE = False
+
 from ..data.cifar10 import get_cifar10_loaders
 from ..models.deit_tiny import deit_tiny
 from ..norms.reproducibility_monitor import ReproducibilityNormMonitor
@@ -28,14 +40,18 @@ MODEL_REGISTRY = {
 }
 
 
-def set_seed(seed: int, deterministic: bool = True, benchmark: bool = False) -> None:
+def set_seed(seed: int, deterministic: bool = True, benchmark: bool = False, cudnn_deterministic: bool = None) -> None:
     """Seed Python, NumPy, and PyTorch for reproducibility."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    torch.backends.cudnn.deterministic = deterministic
+    # cudnn_deterministic can override deterministic for cuDNN specifically
+    if cudnn_deterministic is not None:
+        torch.backends.cudnn.deterministic = cudnn_deterministic
+    else:
+        torch.backends.cudnn.deterministic = deterministic
     torch.backends.cudnn.benchmark = benchmark
 
     if deterministic:
@@ -188,13 +204,47 @@ def _maybe_save_checkpoint(
 
 def run_training(config: Dict[str, Any], output_dir: str = "data/processed/cifar10") -> Dict[str, Any]:
     """Execute end-to-end training based on merged config."""
+    
+    # Merge violation config into main config for easier detection
+    # Violation configs are loaded under cfg.violation, but we want them merged into root
+    def _merge_section(cfg: Dict[str, Any], key: str, incoming: Any) -> None:
+        # Only merge dict→dict; otherwise replace
+        if key in cfg and isinstance(cfg[key], dict) and isinstance(incoming, dict):
+            cfg[key].update(incoming)
+        else:
+            cfg[key] = incoming
+
+    violation_data = config.get("violation", {})
+    if violation_data and isinstance(violation_data, dict):
+        # Merge violation's train, repro, dataset, etc. into main config
+        for key in ["train", "repro", "dataset", "checkpoint", "amp", "scheduler", "optimizer"]:
+            if key in violation_data:
+                _merge_section(config, key, violation_data[key])
+
+        # Reporting/metrics/dtype live at top-level as well
+        for key in ["reporting", "metrics", "dtype"]:
+            if key in violation_data:
+                _merge_section(config, key, violation_data[key])
+    
     train_cfg = config.get("train", {})
     dataset_cfg = config.get("dataset", {})
     checkpoint_cfg = config.get("checkpoint", {})
     repro_cfg = config.get("repro", {})
     violation_cfg = config.get("violations", {}) or {}
-    mode = config.get("modes", "pipeline")
-    regime = config.get("regime", "balanced")
+    
+    # Extract mode string from config (Hydra loads it as a dict from modes/*.yaml)
+    mode_cfg = config.get("modes", "pipeline")
+    if isinstance(mode_cfg, dict):
+        mode = mode_cfg.get("modes", "pipeline")  # Extract the 'modes' key from the dict
+    else:
+        mode = mode_cfg
+    
+    # Extract regime string from config (Hydra loads it as a dict from regime/*.yaml)
+    regime_cfg = config.get("regime", "balanced")
+    if isinstance(regime_cfg, dict):
+        regime = regime_cfg.get("regime", "balanced")  # Extract the 'regime' key from the dict
+    else:
+        regime = regime_cfg
 
     run_dir = Path(output_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -206,37 +256,118 @@ def run_training(config: Dict[str, Any], output_dir: str = "data/processed/cifar
 
     # Initialize agent (only if not in pipeline mode)
     agent = None
+    norm_aware = mode == "norm_aware"
     if mode != "pipeline":
         agent = NormAgent(
             regime=regime,
             mode=mode,
             events_file=str(out_dir / "norms" / "agent_decisions.jsonl"),
             cfg=config,
+            norm_aware=norm_aware,
         )
-        logger.info(f"Agent enabled: mode={mode}, regime={regime}")
+        logger.info(f"Agent enabled: mode={mode}, regime={regime}, norm_aware={norm_aware}")
+    
+    # Initialize Weights & Biases
+    seed = config.get("seed", 42)
+    violation_name = violation_data.get("name", "none") if violation_data else "none"
+    deterministic = repro_cfg.get("deterministic", True)
+    
+    use_wandb = config.get("wandb", {}).get("enabled", False) if isinstance(config.get("wandb"), dict) else False
+    if WANDB_AVAILABLE and use_wandb:
+        # Build semantic tags
+        tags = [mode, regime]
+        if violation_name != "none":
+            tags.extend([violation_name, "violation"])
+        else:
+            tags.append("clean")
+        
+        wandb.init(
+            project=config.get("wandb", {}).get("project", "norm-aware-ml"),
+            name=f"{mode}_s{seed}_{violation_name}",
+            config={
+                "mode": mode,
+                "regime": regime,
+                "seed": seed,
+                "violation": violation_name,
+                "violation_active": violation_name != "none",
+                "deterministic": deterministic,
+                "norm_aware": norm_aware,
+                "epochs": config.get("train", {}).get("epochs", 50),
+                "batch_size": config.get("train", {}).get("batch_size", 256),
+                "lr": config.get("optimizer", {}).get("lr", 3e-4),
+            },
+            tags=tags,
+        )
+        logger.info("Weights & Biases initialized")
+    else:
+        if use_wandb and not WANDB_AVAILABLE:
+            logger.warning("wandb requested but not installed. Install with: pip install wandb")
 
     # Check for reproducibility violations early
     missing_seed = repro_monitor.detect_missing_seed(config)
-    nondeterminism = repro_monitor.detect_nondeterminism(config)
     untracked_config = repro_monitor.detect_untracked_config_change(config)
+    
+    # Check for resource governance violations
+    excessive_batch = repro_monitor.detect_excessive_batch_size(config)
+    inefficient_precision = repro_monitor.detect_inefficient_precision(config)
+    excessive_workers = repro_monitor.detect_excessive_workers(config)
+    
+    # Check for experimental validity violations
+    eval_mode_bug = repro_monitor.detect_eval_mode_bug(config)
+    aug_leak = repro_monitor.detect_aug_leak(config)
+    amp_nan = repro_monitor.detect_amp_nan(config)
+    
+    # Check for reporting standards violations
+    reporting_single_run = repro_monitor.detect_reporting_single_run(config)
+    checkpoint_incomplete = repro_monitor.detect_checkpoint_incomplete(config)
 
     violations_detected = []
     if missing_seed:
         violations_detected.append(("missing_seed", "medium", {"config": {"seed": "not set"}}))
-    if nondeterminism:
-        violations_detected.append(
-            ("nondeterminism_enabled", "high", {"deterministic": False, "cudnn_benchmark": True})
-        )
     if untracked_config:
         violations_detected.append(
             ("untracked_config_change", "high", {"include_config": False, "include_overrides": False})
+        )
+    if excessive_batch:
+        violations_detected.append(
+            ("excessive_batch_size", "medium", {"batch_size": config.get("train", {}).get("batch_size", 128)})
+        )
+    if inefficient_precision:
+        violations_detected.append(
+            ("inefficient_precision", "low", {"amp_enabled": False, "dtype": "fp32"})
+        )
+    if excessive_workers:
+        violations_detected.append(
+            ("excessive_workers", "low", {"num_workers": config.get("dataset", {}).get("num_workers", 4)})
+        )
+    if eval_mode_bug:
+        violations_detected.append(
+            ("eval_mode_bug", "high", {"force_eval_mode": False})
+        )
+    if aug_leak:
+        dataset = config.get("dataset", {})
+        eval_augment = dataset.get("eval_augment", {}) if isinstance(dataset, dict) else getattr(dataset, "eval_augment", {})
+        violations_detected.append(
+            ("aug_leak", "high", {"eval_augment": eval_augment})
+        )
+    if amp_nan:
+        violations_detected.append(
+            ("amp_nan", "high", {"amp_enabled": True, "grad_scaler": False, "warmup_epochs": 0})
+        )
+    if reporting_single_run:
+        violations_detected.append(
+            ("reporting_single_run", "medium", {"require_multi_seed": False, "report_mean_std": False})
+        )
+    if checkpoint_incomplete:
+        violations_detected.append(
+            ("checkpoint_incomplete", "medium", {"include_optimizer": False, "include_scheduler": False})
         )
 
     if violations_detected:
         logger.warning(f"Reproducibility violations detected: {len(violations_detected)}")
         
-        # Agent responds to violations
-        if agent:
+        # Agent responds to violations (norm_aware mode only)
+        if agent and norm_aware:
             for violation_name, severity, evidence in violations_detected:
                 decision = agent.decide_on_violation(violation_name, severity, evidence)
                 logger.info(f"Agent decision: {decision.message}")
@@ -249,8 +380,6 @@ def run_training(config: Dict[str, Any], output_dir: str = "data/processed/cifar
                         # Re-check after remediation
                         if violation_name == "missing_seed":
                             missing_seed = False
-                        elif violation_name == "nondeterminism_enabled":
-                            nondeterminism = False
                         elif violation_name == "untracked_config_change":
                             untracked_config = False
                 
@@ -263,15 +392,16 @@ def run_training(config: Dict[str, Any], output_dir: str = "data/processed/cifar
 
     # Original seed initialization (only if not missing seed violation)
     seed = config.get("seed", 42)
-    deterministic = repro_cfg.get("deterministic", True)
-    benchmark = repro_cfg.get("cudnn_benchmark", False)
+    deterministic = repro_cfg.get("deterministic", False)
+    benchmark = repro_cfg.get("cudnn_benchmark", True)
+    cudnn_deterministic = repro_cfg.get("cudnn_deterministic", None)
     nondet_active = violation_cfg.get("enabled") and "nondeterminism" in set(
         violation_cfg.get("active", [])
     )
     if nondet_active:
         logger.warning("Nondeterminism violation active: skipping deterministic seeding.")
     elif not missing_seed:  # Only set seed if not explicitly missing
-        set_seed(seed, deterministic=deterministic, benchmark=benchmark)
+        set_seed(seed, deterministic=deterministic, benchmark=benchmark, cudnn_deterministic=cudnn_deterministic)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
@@ -333,6 +463,45 @@ def run_training(config: Dict[str, Any], output_dir: str = "data/processed/cifar
                 f"val_loss={val_loss:.4f} val_acc={val_acc:.2f}% lr={current_lr:.5f}"
             )
         )
+        
+        # Log to wandb
+        if WANDB_AVAILABLE and use_wandb:
+            wandb_metrics = {
+                "epoch": epoch,
+                "train/loss": train_loss,
+                "train/acc": train_acc,
+                "val/loss": val_loss,
+                "val/acc": val_acc,
+                "lr": current_lr,
+            }
+            # Add violation and agent metrics if available
+            if repro_monitor:
+                violation_count = repro_monitor.compute_metrics().get("detected_violations", 0)
+                wandb_metrics["violations/detected"] = violation_count
+            if agent:
+                wandb_metrics["agent/remediation_count"] = agent.remediation_count
+                wandb_metrics["agent/halt_count"] = agent.halt_count
+            
+            wandb.log(wandb_metrics)
+
+        # Agentic mode: observe and decide on training actions
+        if agent and not norm_aware:
+            agent.observe_training_state(
+                epoch,
+                {"train_loss": train_loss, "train_acc": train_acc},
+                {"val_loss": val_loss, "val_acc": val_acc}
+            )
+            decision = agent.decide_training_action(current_lr)
+            
+            if decision["action"] == "reduce_lr":
+                factor = decision.get("factor", 0.5)
+                for param_group in optimizer.param_groups:
+                    param_group["lr"] *= factor
+                logger.warning(f"Agentic: Reduced LR by {factor}x to {param_group['lr']:.6f} - {decision.get('reason', '')}")
+            
+            elif decision["action"] == "early_stop":
+                logger.warning(f"Agentic: Early stopping at epoch {epoch} - {decision.get('reason', '')}")
+                break
 
         # Checkpointing: periodic
         if save_every and epoch % save_every == 0:
@@ -414,4 +583,9 @@ def run_training(config: Dict[str, Any], output_dir: str = "data/processed/cifar
         f"Training complete. Best val acc: {best_acc:.2f}% at epoch {best_epoch}. "
         f"Artifacts saved to {run_dir}"
     )
+    
+    # Finish wandb run
+    if WANDB_AVAILABLE and use_wandb:
+        wandb.finish()
+    
     return summary

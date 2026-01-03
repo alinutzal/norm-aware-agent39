@@ -3,6 +3,8 @@ name: checkpoint_incomplete
 description: "Save incomplete checkpoints (missing optimizer/scheduler/scaler)."
 severity: medium
 
+seed: 42
+
 checkpoint:
   include_optimizer: false
   include_scheduler: false
